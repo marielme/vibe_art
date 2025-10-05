@@ -3,6 +3,7 @@ let bodyPose;
 let poses = [];
 let particles = [];
 let statusText;
+let voronoiPoints = [];
 
 function preload() {
     // Load the bodyPose model
@@ -27,6 +28,17 @@ function setup() {
     for (let i = 0; i < 2100; i++) {
         particles.push(new Particle());
     }
+
+    // Initialize voronoi points (fewer for better performance)
+    for (let i = 0; i < 20; i++) {
+        voronoiPoints.push({
+            x: random(width),
+            y: random(height),
+            vx: random(-1, 1),
+            vy: random(-1, 1),
+            hue: random(200, 280) // Blue/purple range
+        });
+    }
 }
 
 function gotPoses(results) {
@@ -34,8 +46,11 @@ function gotPoses(results) {
 }
 
 function draw() {
-    // Semi-transparent background for trail effect
-    background(0, 20);
+    // Solid background
+    background(0);
+
+    // Draw voronoi diagram
+    drawVoronoi();
 
     // Draw skeleton and keypoints
     drawKeypoints();
@@ -45,6 +60,96 @@ function draw() {
     for (let particle of particles) {
         particle.update(poses);
         particle.display();
+    }
+}
+
+function drawVoronoi() {
+    // Update voronoi points with pose interaction
+    updateVoronoiPoints();
+
+    // Draw voronoi edges only (much faster than filling cells)
+    stroke(255, 255, 255, 30);
+    strokeWeight(1);
+    noFill();
+
+    // Draw lines between nearby voronoi points
+    for (let i = 0; i < voronoiPoints.length; i++) {
+        for (let j = i + 1; j < voronoiPoints.length; j++) {
+            let d = dist(voronoiPoints[i].x, voronoiPoints[i].y,
+                        voronoiPoints[j].x, voronoiPoints[j].y);
+            if (d < 150) {
+                let alpha = map(d, 0, 150, 60, 5);
+                stroke(255, 255, 255, alpha);
+                line(voronoiPoints[i].x, voronoiPoints[i].y,
+                     voronoiPoints[j].x, voronoiPoints[j].y);
+            }
+        }
+    }
+
+    // Draw voronoi points
+    for (let point of voronoiPoints) {
+        colorMode(HSB);
+        fill(point.hue, 80, 80, 200);
+        noStroke();
+        circle(point.x, point.y, 8);
+        colorMode(RGB);
+    }
+}
+
+function updateVoronoiPoints() {
+    for (let point of voronoiPoints) {
+        // Random movement
+        point.x += point.vx;
+        point.y += point.vy;
+
+        // Bounce off edges
+        if (point.x < 0 || point.x > width) point.vx *= -1;
+        if (point.y < 0 || point.y > height) point.vy *= -1;
+
+        // Strong attraction to pose keypoints
+        if (poses.length > 0) {
+            let closestDist = Infinity;
+            let closestKeypoint = null;
+
+            for (let keypoint of poses[0].keypoints) {
+                if (keypoint.confidence > 0.2) {
+                    let kx = width - keypoint.x;
+                    let ky = keypoint.y;
+                    let d = dist(point.x, point.y, kx, ky);
+
+                    if (d < closestDist) {
+                        closestDist = d;
+                        closestKeypoint = {x: kx, y: ky};
+                    }
+                }
+            }
+
+            if (closestKeypoint && closestDist < 200) {
+                // Attract to nearest keypoint
+                let angle = atan2(closestKeypoint.y - point.y, closestKeypoint.x - point.x);
+                let force = map(closestDist, 0, 200, 0.5, 0.05);
+                point.vx += cos(angle) * force;
+                point.vy += sin(angle) * force;
+
+                // Change color based on proximity
+                point.hue = map(closestDist, 0, 200, 300, 220);
+            }
+        }
+
+        // Damping
+        point.vx *= 0.95;
+        point.vy *= 0.95;
+
+        // Constrain velocity
+        let speed = sqrt(point.vx * point.vx + point.vy * point.vy);
+        if (speed > 3) {
+            point.vx = (point.vx / speed) * 3;
+            point.vy = (point.vy / speed) * 3;
+        }
+
+        // Constrain position
+        point.x = constrain(point.x, 0, width);
+        point.y = constrain(point.y, 0, height);
     }
 }
 
