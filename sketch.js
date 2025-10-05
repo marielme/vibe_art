@@ -104,8 +104,9 @@ class Particle {
         this.pos = createVector(random(width), random(height));
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
-        this.maxSpeed = 4;
-        this.size = random(3, 8);
+        this.size = random(3, 15);
+        // Smaller particles move faster, larger particles move slower
+        this.maxSpeed = map(this.size, 3, 15, 6, 2);
         this.hue = random(360);
     }
 
