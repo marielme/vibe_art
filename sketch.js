@@ -23,8 +23,8 @@ function setup() {
     statusText = select('#status');
     statusText.html('Model loaded! Move to create art');
 
-    // Initialize particles (reduced for better performance)
-    for (let i = 0; i < 200; i++) {
+    // Initialize particles
+    for (let i = 0; i < 2100; i++) {
         particles.push(new Particle());
     }
 }
