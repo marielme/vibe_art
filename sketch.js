@@ -24,7 +24,7 @@ function setup() {
     statusText.html('Model loaded! Move to create art');
 
     // Initialize particles
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 300; i++) {
         particles.push(new Particle());
     }
 }
@@ -121,28 +121,79 @@ class Particle {
         // Reset acceleration
         this.acc.mult(0);
 
-        // React to pose keypoints
+        // Float around skeleton lines
         if (poses.length > 0) {
-            for (let keypoint of poses[0].keypoints) {
-                if (keypoint.confidence > 0.2) {
-                    let x = width - keypoint.x;
-                    let y = keypoint.y;
-                    let target = createVector(x, y);
-                    let distance = p5.Vector.dist(this.pos, target);
+            let pose = poses[0];
+            let closestDist = Infinity;
+            let closestLinePoint = null;
 
-                    if (distance < 150) {
-                        // Repel from keypoints
-                        let force = p5.Vector.sub(this.pos, target);
-                        force.normalize();
-                        force.mult(map(distance, 0, 150, 1, 0));
-                        this.acc.add(force);
+            // Define skeleton connections
+            let connections = [
+                ['nose', 'left_eye'], ['nose', 'right_eye'],
+                ['left_eye', 'left_ear'], ['right_eye', 'right_ear'],
+                ['left_shoulder', 'right_shoulder'],
+                ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
+                ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],
+                ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
+                ['left_hip', 'right_hip'],
+                ['left_hip', 'left_knee'], ['left_knee', 'left_ankle'],
+                ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
+            ];
+
+            // Find closest point on any skeleton line
+            for (let connection of connections) {
+                let a = pose.keypoints.find(kp => kp.name === connection[0]);
+                let b = pose.keypoints.find(kp => kp.name === connection[1]);
+
+                if (a && b && a.confidence > 0.2 && b.confidence > 0.2) {
+                    let ax = width - a.x;
+                    let ay = a.y;
+                    let bx = width - b.x;
+                    let by = b.y;
+
+                    // Find closest point on line segment to particle
+                    let lineStart = createVector(ax, ay);
+                    let lineEnd = createVector(bx, by);
+                    let closestOnLine = this.closestPointOnLine(this.pos, lineStart, lineEnd);
+                    let distance = p5.Vector.dist(this.pos, closestOnLine);
+
+                    if (distance < closestDist) {
+                        closestDist = distance;
+                        closestLinePoint = closestOnLine;
                     }
                 }
             }
-        }
 
-        // Add slight random movement
-        this.acc.add(createVector(random(-0.1, 0.1), random(-0.1, 0.1)));
+            if (closestLinePoint) {
+                let targetDist = 30; // Desired distance from line
+                let force = p5.Vector.sub(closestLinePoint, this.pos);
+                let distance = force.mag();
+
+                if (distance > targetDist + 10) {
+                    // Move towards the line
+                    force.normalize();
+                    force.mult(0.5);
+                    this.acc.add(force);
+                } else if (distance < targetDist - 10) {
+                    // Move away from the line
+                    force.normalize();
+                    force.mult(-0.5);
+                    this.acc.add(force);
+                }
+
+                // Add tangential movement along the line
+                let tangent = createVector(-force.y, force.x);
+                tangent.normalize();
+                tangent.mult(0.3);
+                this.acc.add(tangent);
+
+                // Add slight random jitter
+                this.acc.add(createVector(random(-0.3, 0.3), random(-0.3, 0.3)));
+            }
+        } else {
+            // Random movement when no pose detected
+            this.acc.add(createVector(random(-0.2, 0.2), random(-0.2, 0.2)));
+        }
 
         // Update velocity and position
         this.vel.add(this.acc);
@@ -157,6 +208,18 @@ class Particle {
 
         // Slowly change hue
         this.hue = (this.hue + 0.5) % 360;
+    }
+
+    closestPointOnLine(point, lineStart, lineEnd) {
+        let line = p5.Vector.sub(lineEnd, lineStart);
+        let len = line.mag();
+        line.normalize();
+
+        let v = p5.Vector.sub(point, lineStart);
+        let d = v.dot(line);
+        d = constrain(d, 0, len);
+
+        return p5.Vector.add(lineStart, p5.Vector.mult(line, d));
     }
 
     display() {
