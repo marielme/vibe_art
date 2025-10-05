@@ -23,8 +23,8 @@ function setup() {
     statusText = select('#status');
     statusText.html('Model loaded! Move to create art');
 
-    // Initialize particles
-    for (let i = 0; i < 300; i++) {
+    // Initialize particles (reduced for better performance)
+    for (let i = 0; i < 200; i++) {
         particles.push(new Particle());
     }
 }
@@ -36,14 +36,6 @@ function gotPoses(results) {
 function draw() {
     // Semi-transparent background for trail effect
     background(0, 20);
-
-    // Draw mirrored video with low opacity
-    push();
-    translate(width, 0);
-    scale(-1, 1);
-    tint(255, 50);
-    image(video, 0, 0, width, height);
-    pop();
 
     // Draw skeleton and keypoints
     drawKeypoints();
