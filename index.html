@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive ML Art</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        main {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+        h1 {
+            color: white;
+            margin: 0 0 5px 0;
+            font-size: 2rem;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
+        }
+        p {
+            color: rgba(255,255,255,0.95);
+            margin: 0 0 10px 0;
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.7);
+        }
+        #status {
+            color: white;
+            font-size: 14px;
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.7);
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Pose-Reactive Particle Art</h1>
+        <p>Move your body to control the particle system</p>
+        <div id="status">Loading model...</div>
+    </main>
+    <script src="sketch.js"></script>
+</body>
+</html>
