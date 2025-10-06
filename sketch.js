@@ -37,7 +37,6 @@ function setup() {
             y: random(height),
             vx: random(-1, 1),
             vy: random(-1, 1),
-            hue: random(200, 280), // Blue/purple range
             noiseOffsetX: random(1000),
             noiseOffsetY: random(1000),
             noiseSpeed: random(0.002, 0.005)
@@ -233,11 +232,9 @@ function drawVoronoi() {
 
     // Draw voronoi points
     for (let point of voronoiPoints) {
-        colorMode(HSB);
-        fill(point.hue, 80, 80, 255);
+        fill(200, 200, 200, 255);
         noStroke();
         circle(point.x, point.y, 12);
-        colorMode(RGB);
     }
 
     // Connect voronoi points to nearby pose keypoints
@@ -252,11 +249,9 @@ function drawVoronoi() {
                     // Only connect if within range
                     if (d < 200) {
                         let alpha = map(d, 0, 200, 150, 10);
-                        colorMode(HSB);
-                        stroke(point.hue, 60, 90, alpha);
+                        stroke(255, 255, 255, alpha);
                         strokeWeight(2);
                         line(point.x, point.y, kx, ky);
-                        colorMode(RGB);
                     }
                 }
             }
@@ -308,9 +303,6 @@ function updateVoronoiPoints() {
                 let force = map(closestDist, 0, 200, 0.5, 0.05);
                 point.vx += cos(angle) * force;
                 point.vy += sin(angle) * force;
-
-                // Change color based on proximity
-                point.hue = map(closestDist, 0, 200, 300, 220);
             }
         }
 
