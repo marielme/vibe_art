@@ -97,6 +97,29 @@ function drawVoronoi() {
         circle(point.x, point.y, 12);
         colorMode(RGB);
     }
+
+    // Connect voronoi points to nearby pose keypoints
+    if (poses.length > 0) {
+        for (let point of voronoiPoints) {
+            for (let keypoint of poses[0].keypoints) {
+                if (keypoint.confidence > 0.3) {
+                    let kx = width - keypoint.x;
+                    let ky = keypoint.y;
+                    let d = dist(point.x, point.y, kx, ky);
+
+                    // Only connect if within range
+                    if (d < 200) {
+                        let alpha = map(d, 0, 200, 150, 10);
+                        colorMode(HSB);
+                        stroke(point.hue, 60, 90, alpha);
+                        strokeWeight(2);
+                        line(point.x, point.y, kx, ky);
+                        colorMode(RGB);
+                    }
+                }
+            }
+        }
+    }
 }
 
 function updateVoronoiPoints() {
