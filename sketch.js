@@ -70,7 +70,33 @@ function drawVoronoi() {
     // Update voronoi points with pose interaction
     updateVoronoiPoints();
 
-    // Draw voronoi edges only (much faster than filling cells)
+    // Draw filled triangles first
+    noStroke();
+    for (let i = 0; i < voronoiPoints.length; i++) {
+        for (let j = i + 1; j < voronoiPoints.length; j++) {
+            let d1 = dist(voronoiPoints[i].x, voronoiPoints[i].y,
+                         voronoiPoints[j].x, voronoiPoints[j].y);
+            if (d1 < 250) {
+                // Find a third point to make a triangle
+                for (let k = j + 1; k < voronoiPoints.length; k++) {
+                    let d2 = dist(voronoiPoints[j].x, voronoiPoints[j].y,
+                                 voronoiPoints[k].x, voronoiPoints[k].y);
+                    let d3 = dist(voronoiPoints[i].x, voronoiPoints[i].y,
+                                 voronoiPoints[k].x, voronoiPoints[k].y);
+
+                    if (d2 < 250 && d3 < 250) {
+                        // Draw filled triangle
+                        fill(255, 255, 255, 15);
+                        triangle(voronoiPoints[i].x, voronoiPoints[i].y,
+                                voronoiPoints[j].x, voronoiPoints[j].y,
+                                voronoiPoints[k].x, voronoiPoints[k].y);
+                    }
+                }
+            }
+        }
+    }
+
+    // Draw voronoi edges on top
     stroke(255, 255, 255, 60);
     strokeWeight(2);
     noFill();
