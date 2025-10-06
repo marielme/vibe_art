@@ -3,8 +3,12 @@ let bodyPose;
 let poses = [];
 let particles = [];
 let statusText;
-let voronoiPoints = [];
 let pixelArtGrid = [];
+let synth;
+let musicStarted = false;
+let melodicSequence;
+let bassSynth;
+let prevPosePositions = [];
 
 function preload() {
     // Load the bodyPose model
@@ -23,24 +27,43 @@ function setup() {
     bodyPose.detectStart(video, gotPoses);
 
     statusText = select('#status');
-    statusText.html('Model loaded! Move to create art');
+    statusText.html('Model loaded! Click to start music and move to create art');
+
+    // Setup Tone.js synthesizer for melody
+    synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sine' },
+        envelope: {
+            attack: 0.1,
+            decay: 0.3,
+            sustain: 0.4,
+            release: 1
+        },
+        volume: -8
+    }).toDestination();
+
+    // Bass synth for movement-triggered notes
+    bassSynth = new Tone.Synth({
+        oscillator: { type: 'triangle' },
+        envelope: {
+            attack: 0.05,
+            decay: 0.2,
+            sustain: 0.3,
+            release: 0.8
+        },
+        volume: -12
+    }).toDestination();
+
+    // Add reverb for atmosphere
+    const reverb = new Tone.Reverb({
+        decay: 3,
+        wet: 0.3
+    }).toDestination();
+    synth.connect(reverb);
+    bassSynth.connect(reverb);
 
     // Initialize particles
     for (let i = 0; i < 2100; i++) {
         particles.push(new Particle());
-    }
-
-    // Initialize voronoi points (fewer for better performance)
-    for (let i = 0; i < 50; i++) {
-        voronoiPoints.push({
-            x: random(width),
-            y: random(height),
-            vx: random(-1, 1),
-            vy: random(-1, 1),
-            noiseOffsetX: random(1000),
-            noiseOffsetY: random(1000),
-            noiseSpeed: random(0.002, 0.005)
-        });
     }
 
     // Initialize pixel art grid
@@ -52,7 +75,9 @@ function setup() {
                     x: x,
                     y: y,
                     size: pixelSize,
-                    updateCounter: floor(random(60)) // Stagger updates
+                    updateCounter: floor(random(60)), // Stagger updates
+                    active: random() > 0.5, // Start randomly active or inactive
+                    activationTimer: floor(random(30, 120)) // Random interval for toggling
                 });
             }
         }
@@ -67,6 +92,16 @@ function drawPixelArt() {
     video.loadPixels();
 
     for (let pixel of pixelArtGrid) {
+        // Random activation/deactivation
+        pixel.activationTimer--;
+        if (pixel.activationTimer <= 0) {
+            pixel.active = !pixel.active; // Toggle state
+            pixel.activationTimer = floor(random(30, 120)); // Reset timer with random interval
+        }
+
+        // Skip if not active
+        if (!pixel.active) continue;
+
         // Update every N frames for variety
         pixel.updateCounter++;
         if (pixel.updateCounter > 30) {
@@ -160,15 +195,66 @@ function distToSegment(p, v, w) {
     return p5.Vector.dist(p, projection);
 }
 
+function mousePressed() {
+    // Start music on first user interaction
+    if (!musicStarted) {
+        Tone.start().then(() => {
+            startMusic();
+            musicStarted = true;
+            statusText.html('Music started! Move to create art');
+        });
+    }
+}
+
+function startMusic() {
+    // Swan Lake Theme - Main melody
+    const swanLakeMelody = [
+        // First phrase
+        { note: 'B4', duration: '4n' },
+        { note: 'A4', duration: '8n' },
+        { note: 'G4', duration: '8n' },
+        { note: 'A4', duration: '4n' },
+        { note: 'G4', duration: '8n' },
+        { note: 'F#4', duration: '8n' },
+        { note: 'G4', duration: '4n' },
+        { note: 'E4', duration: '4n' },
+        // Second phrase
+        { note: 'G4', duration: '4n' },
+        { note: 'F#4', duration: '8n' },
+        { note: 'E4', duration: '8n' },
+        { note: 'F#4', duration: '4n' },
+        { note: 'E4', duration: '8n' },
+        { note: 'D4', duration: '8n' },
+        { note: 'E4', duration: '4n' },
+        { note: 'C4', duration: '4n' },
+        // Repeat
+        { note: 'B4', duration: '4n' },
+        { note: 'A4', duration: '8n' },
+        { note: 'G4', duration: '8n' },
+        { note: 'A4', duration: '4n' },
+        { note: 'G4', duration: '8n' },
+        { note: 'F#4', duration: '8n' },
+        { note: 'G4', duration: '2n' }
+    ];
+
+    let index = 0;
+    melodicSequence = new Tone.Sequence((time) => {
+        const { note, duration } = swanLakeMelody[index % swanLakeMelody.length];
+        synth.triggerAttackRelease(note, duration, time);
+        index++;
+    }, Array(swanLakeMelody.length).fill(0).map((_, i) => i), '8n');
+
+    melodicSequence.start(0);
+    Tone.Transport.bpm.value = 100;
+    Tone.Transport.start();
+}
+
 function draw() {
     // Solid background
     background(0);
 
     // Draw pixel art from video
     drawPixelArt();
-
-    // Draw voronoi diagram
-    drawVoronoi();
 
     // Draw skeleton and keypoints
     drawKeypoints();
@@ -179,147 +265,59 @@ function draw() {
         particle.update(poses);
         particle.display();
     }
-}
 
-function drawVoronoi() {
-    // Update voronoi points with pose interaction
-    updateVoronoiPoints();
+    // Modulate music based on movement
+    if (musicStarted && poses.length > 0) {
+        let pose = poses[0];
 
-    // Draw filled triangles first
-    noStroke();
-    for (let i = 0; i < voronoiPoints.length; i++) {
-        for (let j = i + 1; j < voronoiPoints.length; j++) {
-            let d1 = dist(voronoiPoints[i].x, voronoiPoints[i].y,
-                         voronoiPoints[j].x, voronoiPoints[j].y);
-            if (d1 < 250) {
-                // Find a third point to make a triangle
-                for (let k = j + 1; k < voronoiPoints.length; k++) {
-                    let d2 = dist(voronoiPoints[j].x, voronoiPoints[j].y,
-                                 voronoiPoints[k].x, voronoiPoints[k].y);
-                    let d3 = dist(voronoiPoints[i].x, voronoiPoints[i].y,
-                                 voronoiPoints[k].x, voronoiPoints[k].y);
+        // Calculate movement speed
+        let totalMovement = 0;
+        let validKeypoints = 0;
 
-                    if (d2 < 250 && d3 < 250) {
-                        // Draw filled triangle
-                        fill(255, 255, 255, 15);
-                        triangle(voronoiPoints[i].x, voronoiPoints[i].y,
-                                voronoiPoints[j].x, voronoiPoints[j].y,
-                                voronoiPoints[k].x, voronoiPoints[k].y);
-                    }
+        for (let i = 0; i < pose.keypoints.length; i++) {
+            let keypoint = pose.keypoints[i];
+            if (keypoint.confidence > 0.3) {
+                if (prevPosePositions[i]) {
+                    let dx = keypoint.x - prevPosePositions[i].x;
+                    let dy = keypoint.y - prevPosePositions[i].y;
+                    totalMovement += sqrt(dx * dx + dy * dy);
+                    validKeypoints++;
                 }
+                prevPosePositions[i] = { x: keypoint.x, y: keypoint.y };
             }
         }
-    }
 
-    // Draw voronoi edges on top
-    stroke(255, 255, 255, 60);
-    strokeWeight(2);
-    noFill();
+        if (validKeypoints > 0) {
+            let avgMovement = totalMovement / validKeypoints;
 
-    // Draw lines between nearby voronoi points
-    for (let i = 0; i < voronoiPoints.length; i++) {
-        for (let j = i + 1; j < voronoiPoints.length; j++) {
-            let d = dist(voronoiPoints[i].x, voronoiPoints[i].y,
-                        voronoiPoints[j].x, voronoiPoints[j].y);
-            if (d < 250) {
-                let alpha = map(d, 0, 250, 120, 10);
-                stroke(255, 255, 255, alpha);
-                line(voronoiPoints[i].x, voronoiPoints[i].y,
-                     voronoiPoints[j].x, voronoiPoints[j].y);
+            // Adjust tempo based on movement speed
+            let newTempo = map(avgMovement, 0, 20, 85, 130);
+            newTempo = constrain(newTempo, 85, 130);
+            Tone.Transport.bpm.rampTo(newTempo, 0.5);
+
+            // Trigger bass notes on significant movements
+            if (avgMovement > 10 && frameCount % 15 === 0) {
+                let bassNotes = ['G2', 'C2', 'D2', 'E2'];
+                let randomBass = random(bassNotes);
+                bassSynth.triggerAttackRelease(randomBass, '8n');
             }
-        }
-    }
 
-    // Draw voronoi points
-    for (let point of voronoiPoints) {
-        fill(200, 200, 200, 255);
-        noStroke();
-        circle(point.x, point.y, 12);
-    }
-
-    // Connect voronoi points to nearby pose keypoints
-    if (poses.length > 0) {
-        for (let point of voronoiPoints) {
-            for (let keypoint of poses[0].keypoints) {
+            // Change synth brightness based on vertical position
+            let avgY = 0;
+            let yCount = 0;
+            for (let keypoint of pose.keypoints) {
                 if (keypoint.confidence > 0.3) {
-                    let kx = width - keypoint.x;
-                    let ky = keypoint.y;
-                    let d = dist(point.x, point.y, kx, ky);
-
-                    // Only connect if within range
-                    if (d < 200) {
-                        let alpha = map(d, 0, 200, 150, 10);
-                        stroke(255, 255, 255, alpha);
-                        strokeWeight(2);
-                        line(point.x, point.y, kx, ky);
-                    }
+                    avgY += keypoint.y;
+                    yCount++;
                 }
             }
-        }
-    }
-}
-
-function updateVoronoiPoints() {
-    for (let point of voronoiPoints) {
-        // Smooth Perlin noise-based movement
-        let noiseX = noise(point.noiseOffsetX) * 2 - 1;
-        let noiseY = noise(point.noiseOffsetY) * 2 - 1;
-
-        point.vx += noiseX * 0.1;
-        point.vy += noiseY * 0.1;
-
-        // Increment noise offsets for continuous smooth movement
-        point.noiseOffsetX += point.noiseSpeed;
-        point.noiseOffsetY += point.noiseSpeed;
-
-        point.x += point.vx;
-        point.y += point.vy;
-
-        // Bounce off edges
-        if (point.x < 0 || point.x > width) point.vx *= -1;
-        if (point.y < 0 || point.y > height) point.vy *= -1;
-
-        // Strong attraction to pose keypoints
-        if (poses.length > 0) {
-            let closestDist = Infinity;
-            let closestKeypoint = null;
-
-            for (let keypoint of poses[0].keypoints) {
-                if (keypoint.confidence > 0.2) {
-                    let kx = width - keypoint.x;
-                    let ky = keypoint.y;
-                    let d = dist(point.x, point.y, kx, ky);
-
-                    if (d < closestDist) {
-                        closestDist = d;
-                        closestKeypoint = {x: kx, y: ky};
-                    }
-                }
-            }
-
-            if (closestKeypoint && closestDist < 200) {
-                // Attract to nearest keypoint
-                let angle = atan2(closestKeypoint.y - point.y, closestKeypoint.x - point.x);
-                let force = map(closestDist, 0, 200, 0.5, 0.05);
-                point.vx += cos(angle) * force;
-                point.vy += sin(angle) * force;
+            if (yCount > 0) {
+                avgY /= yCount;
+                // Higher position = brighter sound
+                let brightness = map(avgY, 0, height, 3, 0.3);
+                synth.set({ envelope: { decay: brightness } });
             }
         }
-
-        // Damping
-        point.vx *= 0.95;
-        point.vy *= 0.95;
-
-        // Constrain velocity
-        let speed = sqrt(point.vx * point.vx + point.vy * point.vy);
-        if (speed > 3) {
-            point.vx = (point.vx / speed) * 3;
-            point.vy = (point.vy / speed) * 3;
-        }
-
-        // Constrain position
-        point.x = constrain(point.x, 0, width);
-        point.y = constrain(point.y, 0, height);
     }
 }
 
