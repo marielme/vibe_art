@@ -30,13 +30,16 @@ function setup() {
     }
 
     // Initialize voronoi points (fewer for better performance)
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 50; i++) {
         voronoiPoints.push({
             x: random(width),
             y: random(height),
             vx: random(-1, 1),
             vy: random(-1, 1),
-            hue: random(200, 280) // Blue/purple range
+            hue: random(200, 280), // Blue/purple range
+            noiseOffsetX: random(1000),
+            noiseOffsetY: random(1000),
+            noiseSpeed: random(0.002, 0.005)
         });
     }
 }
@@ -68,8 +71,8 @@ function drawVoronoi() {
     updateVoronoiPoints();
 
     // Draw voronoi edges only (much faster than filling cells)
-    stroke(255, 255, 255, 30);
-    strokeWeight(1);
+    stroke(255, 255, 255, 60);
+    strokeWeight(2);
     noFill();
 
     // Draw lines between nearby voronoi points
@@ -77,8 +80,8 @@ function drawVoronoi() {
         for (let j = i + 1; j < voronoiPoints.length; j++) {
             let d = dist(voronoiPoints[i].x, voronoiPoints[i].y,
                         voronoiPoints[j].x, voronoiPoints[j].y);
-            if (d < 150) {
-                let alpha = map(d, 0, 150, 60, 5);
+            if (d < 250) {
+                let alpha = map(d, 0, 250, 120, 10);
                 stroke(255, 255, 255, alpha);
                 line(voronoiPoints[i].x, voronoiPoints[i].y,
                      voronoiPoints[j].x, voronoiPoints[j].y);
@@ -89,16 +92,26 @@ function drawVoronoi() {
     // Draw voronoi points
     for (let point of voronoiPoints) {
         colorMode(HSB);
-        fill(point.hue, 80, 80, 200);
+        fill(point.hue, 80, 80, 255);
         noStroke();
-        circle(point.x, point.y, 8);
+        circle(point.x, point.y, 12);
         colorMode(RGB);
     }
 }
 
 function updateVoronoiPoints() {
     for (let point of voronoiPoints) {
-        // Random movement
+        // Smooth Perlin noise-based movement
+        let noiseX = noise(point.noiseOffsetX) * 2 - 1;
+        let noiseY = noise(point.noiseOffsetY) * 2 - 1;
+
+        point.vx += noiseX * 0.1;
+        point.vy += noiseY * 0.1;
+
+        // Increment noise offsets for continuous smooth movement
+        point.noiseOffsetX += point.noiseSpeed;
+        point.noiseOffsetY += point.noiseSpeed;
+
         point.x += point.vx;
         point.y += point.vy;
 
