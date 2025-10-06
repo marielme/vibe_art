@@ -9,6 +9,8 @@ let musicStarted = false;
 let melodicSequence;
 let bassSynth;
 let prevPosePositions = [];
+let arpeggiator;
+let arpSynth;
 
 function preload() {
     // Load the bodyPose model
@@ -53,6 +55,18 @@ function setup() {
         volume: -12
     }).toDestination();
 
+    // Arpeggiator synth for hand distance control
+    arpSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'square' },
+        envelope: {
+            attack: 0.01,
+            decay: 0.1,
+            sustain: 0.2,
+            release: 0.3
+        },
+        volume: -15
+    }).toDestination();
+
     // Add reverb for atmosphere
     const reverb = new Tone.Reverb({
         decay: 3,
@@ -60,6 +74,7 @@ function setup() {
     }).toDestination();
     synth.connect(reverb);
     bassSynth.connect(reverb);
+    arpSynth.connect(reverb);
 
     // Initialize particles
     for (let i = 0; i < 2100; i++) {
@@ -290,16 +305,16 @@ function draw() {
         if (validKeypoints > 0) {
             let avgMovement = totalMovement / validKeypoints;
 
-            // Adjust tempo based on movement speed
-            let newTempo = map(avgMovement, 0, 20, 85, 130);
-            newTempo = constrain(newTempo, 85, 130);
-            Tone.Transport.bpm.rampTo(newTempo, 0.5);
+            // EXAGGERATED tempo based on movement speed
+            let newTempo = map(avgMovement, 0, 30, 60, 180);
+            newTempo = constrain(newTempo, 60, 180);
+            Tone.Transport.bpm.rampTo(newTempo, 0.2);
 
-            // Trigger bass notes on significant movements
-            if (avgMovement > 10 && frameCount % 15 === 0) {
-                let bassNotes = ['G2', 'C2', 'D2', 'E2'];
+            // Trigger DRAMATIC bass notes on movements
+            if (avgMovement > 5 && frameCount % 10 === 0) {
+                let bassNotes = ['G1', 'C2', 'D2', 'E2', 'F2'];
                 let randomBass = random(bassNotes);
-                bassSynth.triggerAttackRelease(randomBass, '8n');
+                bassSynth.triggerAttackRelease(randomBass, '16n');
             }
 
             // Change synth brightness based on vertical position
@@ -313,9 +328,71 @@ function draw() {
             }
             if (yCount > 0) {
                 avgY /= yCount;
-                // Higher position = brighter sound
-                let brightness = map(avgY, 0, height, 3, 0.3);
-                synth.set({ envelope: { decay: brightness } });
+                // EXAGGERATED brightness - higher position = much brighter
+                let brightness = map(avgY, 0, height, 5, 0.1);
+                synth.set({ envelope: { decay: brightness, release: brightness * 2 } });
+            }
+        }
+
+        // HAND DISTANCE ARPEGGIATOR
+        let leftWrist = pose.keypoints.find(kp => kp.name === 'left_wrist');
+        let rightWrist = pose.keypoints.find(kp => kp.name === 'right_wrist');
+
+        if (leftWrist && rightWrist && leftWrist.confidence > 0.3 && rightWrist.confidence > 0.3) {
+            let handDistance = dist(leftWrist.x, leftWrist.y, rightWrist.x, rightWrist.y);
+
+            // Map hand distance to note range - wider hands = wider note intervals
+            let noteRange = floor(map(handDistance, 50, 500, 1, 12));
+            noteRange = constrain(noteRange, 1, 12);
+
+            // Trigger arpeggio based on hand distance
+            if (frameCount % 8 === 0) {
+                // Base note from hand height
+                let baseNoteIndex = floor(map((leftWrist.y + rightWrist.y) / 2, 0, height, 7, 0));
+                baseNoteIndex = constrain(baseNoteIndex, 0, 7);
+
+                let scaleNotes = ['C4', 'D4', 'E4', 'F#4', 'G4', 'A4', 'B4', 'C5'];
+                let baseNote = scaleNotes[baseNoteIndex];
+
+                // Create arpeggio pattern based on distance
+                let arpNotes = [baseNote];
+                for (let i = 1; i <= 3; i++) {
+                    let nextIndex = (baseNoteIndex + i * noteRange) % scaleNotes.length;
+                    arpNotes.push(scaleNotes[nextIndex]);
+                }
+
+                // Play the arpeggio
+                let now = Tone.now();
+                arpNotes.forEach((note, index) => {
+                    arpSynth.triggerAttackRelease(note, '32n', now + index * 0.05);
+                });
+            }
+
+            // EXTREME volume modulation based on hand spread
+            let arpVolume = map(handDistance, 50, 500, -30, -8);
+            arpSynth.volume.rampTo(arpVolume, 0.1);
+        }
+
+        // ARM SPREAD CONTROLS REVERB WET
+        let leftShoulder = pose.keypoints.find(kp => kp.name === 'left_shoulder');
+        let rightShoulder = pose.keypoints.find(kp => kp.name === 'right_shoulder');
+        let leftElbow = pose.keypoints.find(kp => kp.name === 'left_elbow');
+        let rightElbow = pose.keypoints.find(kp => kp.name === 'right_elbow');
+
+        if (leftShoulder && rightShoulder && leftElbow && rightElbow) {
+            if (leftShoulder.confidence > 0.3 && rightShoulder.confidence > 0.3 &&
+                leftElbow.confidence > 0.3 && rightElbow.confidence > 0.3) {
+
+                let armSpread = dist(leftElbow.x, leftElbow.y, rightElbow.x, rightElbow.y);
+                let shoulderDist = dist(leftShoulder.x, leftShoulder.y, rightShoulder.x, rightShoulder.y);
+
+                // Wide arms = more reverb
+                if (shoulderDist > 0) {
+                    let spreadRatio = armSpread / shoulderDist;
+                    // EXAGGERATED reverb effect
+                    let reverbWet = map(spreadRatio, 0.5, 3, 0.1, 0.95);
+                    reverbWet = constrain(reverbWet, 0.1, 0.95);
+                }
             }
         }
     }
