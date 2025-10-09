@@ -1,5 +1,7 @@
 # Interactive ML Art Gallery - Vibe Shift Hackathon
 
+🌐 **[View Live Demo](https://marielme.github.io/vibe_art/)**
+
 A collection of 4 interactive art experiments that transform your body into a conductor of digital energy. Using real-time pose detection, your movements create unique artistic expressions ranging from geometric patterns to musical interactions.
 
 ## 🎨 Art Experiments
