@@ -9,7 +9,7 @@ function preload() {
     // Load the bodyPose model
     bodyPose = ml5.bodyPose();
     // Load logo image
-    logoImg = loadImage('/art4_claude_logo/logo.png');
+    logoImg = loadImage('./logo.png');
 }
 
 function setup() {
