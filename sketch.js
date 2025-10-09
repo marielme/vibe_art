@@ -5,6 +5,7 @@ let particles = [];
 let statusText;
 let voronoiPoints = [];
 let pixelArtGrid = [];
+let portals = [];
 
 function preload() {
     // Load the bodyPose model
@@ -57,6 +58,32 @@ function setup() {
             }
         }
     }
+
+    // Initialize portals
+    for (let i = 0; i < 3; i++) {
+        portals.push(createPortal());
+    }
+}
+
+function createPortal() {
+    return {
+        x: random(width * 0.2, width * 0.8),
+        y: random(height * 0.2, height * 0.8),
+        currentSize: random(80, 150),
+        targetSize: random(60, 200),
+        rotation: random(TWO_PI),
+        rotationSpeed: random(-0.02, 0.02),
+        hue: random(360),
+        targetHue: random(360),
+        pulseOffset: random(TWO_PI),
+        layers: floor(random(5, 9)),
+        vx: random(-0.3, 0.3),
+        vy: random(-0.3, 0.3),
+        isHit: false,
+        hitVelocityX: 0,
+        hitVelocityY: 0,
+        angularVelocity: 0
+    };
 }
 
 function gotPoses(results) {
@@ -164,6 +191,9 @@ function draw() {
     // Solid background
     background(0);
 
+    // Draw and update portals (in background layer)
+    updateAndDrawPortals();
+
     // Draw pixel art from video
     drawPixelArt();
 
@@ -178,6 +208,220 @@ function draw() {
     for (let particle of particles) {
         particle.update(poses);
         particle.display();
+    }
+}
+
+function updateAndDrawPortals() {
+    // Check for collisions with skeleton keypoints
+    if (poses.length > 0) {
+        let pose = poses[0];
+
+        // Key body parts that can hit portals (hands, feet, head, elbows, knees)
+        let hitPoints = ['left_wrist', 'right_wrist', 'left_ankle', 'right_ankle',
+                         'left_elbow', 'right_elbow', 'left_knee', 'right_knee', 'nose'];
+
+        for (let portal of portals) {
+            if (!portal.isHit) {
+                for (let pointName of hitPoints) {
+                    let keypoint = pose.keypoints.find(kp => kp.name === pointName);
+
+                    if (keypoint && keypoint.confidence > 0.3) {
+                        let kx = width - keypoint.x;
+                        let ky = keypoint.y;
+                        let distance = dist(kx, ky, portal.x, portal.y);
+
+                        // Check if body part is touching portal
+                        if (distance < portal.currentSize * 0.6) {
+                            // Portal got hit!
+                            portal.isHit = true;
+
+                            // Calculate direction from portal to hit point
+                            let angle = atan2(ky - portal.y, kx - portal.x);
+
+                            // Launch portal away with force
+                            let force = random(15, 25);
+                            portal.hitVelocityX = cos(angle) * force;
+                            portal.hitVelocityY = sin(angle) * force;
+
+                            // Add spinning effect
+                            portal.angularVelocity = random(-0.3, 0.3);
+
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for (let i = portals.length - 1; i >= 0; i--) {
+        let portal = portals[i];
+
+        if (portal.isHit) {
+            // Portal is flying away after being hit
+            portal.x += portal.hitVelocityX;
+            portal.y += portal.hitVelocityY;
+
+            // Add gravity
+            portal.hitVelocityY += 0.5;
+
+            // Friction
+            portal.hitVelocityX *= 0.98;
+
+            // Rolling/spinning
+            portal.rotation += portal.angularVelocity;
+
+            // Remove if off screen
+            if (portal.x < -200 || portal.x > width + 200 ||
+                portal.y < -200 || portal.y > height + 200) {
+                portals.splice(i, 1);
+                // Create a new portal to replace it
+                portals.push(createPortal());
+                continue;
+            }
+        } else {
+            // Normal portal behavior
+            // Smooth size transition - growing and shrinking
+            let sizeDiff = portal.targetSize - portal.currentSize;
+            portal.currentSize += sizeDiff * 0.05;
+
+            // When close to target, pick a new random target size
+            if (abs(sizeDiff) < 5) {
+                portal.targetSize = random(100, 280);
+            }
+
+            // Smooth color transition
+            let hueDiff = portal.targetHue - portal.hue;
+            if (hueDiff > 180) hueDiff -= 360;
+            if (hueDiff < -180) hueDiff += 360;
+            portal.hue += hueDiff * 0.02;
+            if (portal.hue < 0) portal.hue += 360;
+            if (portal.hue > 360) portal.hue -= 360;
+
+            // Change target color randomly
+            if (frameCount % 180 === 0 && random() < 0.4) {
+                portal.targetHue = random(360);
+            }
+
+            // Rotation
+            portal.rotation += portal.rotationSpeed;
+
+            // Gentle drift movement
+            portal.x += portal.vx;
+            portal.y += portal.vy;
+
+            // Bounce off edges
+            if (portal.x < 150 || portal.x > width - 150) portal.vx *= -1;
+            if (portal.y < 150 || portal.y > height - 150) portal.vy *= -1;
+        }
+
+        push();
+        translate(portal.x, portal.y);
+        rotate(portal.rotation);
+
+        blendMode(ADD);
+
+        let baseSize = portal.currentSize;
+
+        // Pulsing effect
+        let pulse = sin(frameCount * 0.05 + portal.pulseOffset) * 0.1 + 1;
+        let animatedSize = baseSize * pulse;
+
+        colorMode(HSB);
+
+        // Draw dark center void
+        noStroke();
+        fill(0, 0, 0, 200);
+        circle(0, 0, animatedSize * 0.5);
+
+        // Draw multiple layers of electric energy ring
+        for (let layer = portal.layers; layer >= 0; layer--) {
+            let layerRadius = animatedSize * (0.5 + layer * 0.1);
+            let layerAlpha = map(layer, 0, portal.layers, 150, 30);
+
+            noFill();
+            stroke(portal.hue, 90, 100, layerAlpha);
+            strokeWeight(map(layer, 0, portal.layers, 6, 2));
+
+            // Draw irregular circle with noise distortion for electric effect
+            beginShape();
+            for (let angle = 0; angle < TWO_PI + 0.1; angle += 0.1) {
+                let noiseVal = noise(cos(angle) * 2, sin(angle) * 2, frameCount * 0.01 + layer);
+                let r = layerRadius + noiseVal * 15;
+                let x = cos(angle) * r;
+                let y = sin(angle) * r;
+                vertex(x, y);
+            }
+            endShape(CLOSE);
+        }
+
+        // Outer glow layers
+        for (let i = 0; i < 3; i++) {
+            let glowRadius = animatedSize * (1 + i * 0.15);
+            let glowAlpha = map(i, 0, 3, 80, 10);
+
+            noFill();
+            stroke(portal.hue, 70, 100, glowAlpha);
+            strokeWeight(8 - i * 2);
+            circle(0, 0, glowRadius * 2);
+        }
+
+        colorMode(RGB);
+
+        // Electric energy particles floating around the ring
+        for (let i = 0; i < 25; i++) {
+            let angle = (frameCount * 0.02 + i * 0.25) % TWO_PI;
+            let radius = baseSize * (0.7 + noise(i, frameCount * 0.01) * 0.3);
+
+            let px = cos(angle) * radius;
+            let py = sin(angle) * radius;
+
+            // Additional noise distortion for chaotic movement
+            px += noise(i * 10, frameCount * 0.02) * 20 - 10;
+            py += noise(i * 10 + 100, frameCount * 0.02) * 20 - 10;
+
+            // Twinkling effect
+            let twinkle = sin(frameCount * 0.1 + i) * 0.5 + 0.5;
+
+            noStroke();
+            colorMode(HSB);
+            fill(portal.hue + random(-30, 30), 100, 100, 200 * twinkle);
+            circle(px, py, random(4, 10));
+            colorMode(RGB);
+        }
+
+        // Lightning bolts across the portal
+        if (frameCount % 6 === 0 && random() < 0.5) {
+            for (let i = 0; i < 3; i++) {
+                let angle1 = random(TWO_PI);
+                let angle2 = angle1 + random(-PI/3, PI/3);
+                let r1 = random(baseSize * 0.3, baseSize * 0.9);
+                let r2 = random(baseSize * 0.3, baseSize * 0.9);
+
+                let x1 = cos(angle1) * r1;
+                let y1 = sin(angle1) * r1;
+                let x2 = cos(angle2) * r2;
+                let y2 = sin(angle2) * r2;
+
+                colorMode(HSB);
+                stroke(portal.hue, 100, 100, 255);
+                strokeWeight(2);
+                line(x1, y1, x2, y2);
+                colorMode(RGB);
+            }
+        }
+
+        blendMode(BLEND);
+        pop();
+    }
+
+    // Occasionally add or remove portals
+    if (frameCount % 300 === 0) {
+        if (portals.length < 4 && random() < 0.5) {
+            portals.push(createPortal());
+        } else if (portals.length > 2 && random() < 0.3) {
+            portals.splice(floor(random(portals.length)), 1);
+        }
     }
 }
 
@@ -492,9 +736,55 @@ class Particle {
 
     display() {
         colorMode(HSB);
+        push();
+        translate(this.pos.x, this.pos.y);
+
+        // Rotate based on velocity direction for dynamic look
+        let angle = this.vel.heading();
+        rotate(angle);
+
+        // Draw Claude-logo-inspired shape (curved wave/swoosh)
         noStroke();
         fill(this.hue, 80, 100, 0.8);
-        circle(this.pos.x, this.pos.y, this.size);
+
+        // Main curved shape - similar to Claude's swoosh
+        beginShape();
+        // Create a smooth curved shape
+        let baseSize = this.size;
+
+        // Left curve (top part of swoosh)
+        curveVertex(-baseSize * 0.8, -baseSize * 0.3);
+        curveVertex(-baseSize * 0.6, -baseSize * 0.4);
+        curveVertex(-baseSize * 0.2, -baseSize * 0.5);
+        curveVertex(0, -baseSize * 0.4);
+        curveVertex(baseSize * 0.3, -baseSize * 0.2);
+        curveVertex(baseSize * 0.6, 0);
+
+        // Right curve (bottom part of swoosh)
+        curveVertex(baseSize * 0.6, 0);
+        curveVertex(baseSize * 0.3, baseSize * 0.2);
+        curveVertex(0, baseSize * 0.4);
+        curveVertex(-baseSize * 0.2, baseSize * 0.5);
+        curveVertex(-baseSize * 0.6, baseSize * 0.4);
+        curveVertex(-baseSize * 0.8, baseSize * 0.3);
+
+        endShape(CLOSE);
+
+        // Add a subtle inner glow
+        fill(this.hue, 60, 100, 0.5);
+        beginShape();
+        let innerSize = baseSize * 0.6;
+        curveVertex(-innerSize * 0.6, -innerSize * 0.2);
+        curveVertex(-innerSize * 0.4, -innerSize * 0.3);
+        curveVertex(0, -innerSize * 0.3);
+        curveVertex(innerSize * 0.4, -innerSize * 0.1);
+        curveVertex(innerSize * 0.4, innerSize * 0.1);
+        curveVertex(0, innerSize * 0.3);
+        curveVertex(-innerSize * 0.4, innerSize * 0.3);
+        curveVertex(-innerSize * 0.6, innerSize * 0.2);
+        endShape(CLOSE);
+
+        pop();
         colorMode(RGB);
     }
 }
