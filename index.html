@@ -108,6 +108,8 @@
             font-size: 4rem;
             position: relative;
             overflow: hidden;
+            background-size: cover;
+            background-position: center;
         }
 
         .art-card-image::after {
@@ -126,19 +128,33 @@
         }
 
         .art-card:nth-child(1) .art-card-image {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background-image: url('./images/example1.png');
         }
 
         .art-card:nth-child(2) .art-card-image {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background-image: url('./images/example2.png');
         }
 
         .art-card:nth-child(3) .art-card-image {
-            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            background-image: url('./images/example3.png');
         }
 
         .art-card:nth-child(4) .art-card-image {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            background-image: url('./images/example4.png');
+        }
+
+        .art-card-image-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            transition: opacity 0.3s ease;
+        }
+
+        .art-card:hover .art-card-image-overlay {
+            opacity: 0;
         }
 
         .art-card-content {
@@ -234,7 +250,9 @@
 
         <div class="gallery">
             <a href="art1_dots/index.html" class="art-card">
-                <div class="art-card-image">🎨</div>
+                <div class="art-card-image">
+                    <div class="art-card-image-overlay"></div>
+                </div>
                 <div class="art-card-content">
                     <h2>Experiment 1: Dots</h2>
                     <p>Simple particle system that responds to your body movements with flowing dots and trails.</p>
@@ -243,7 +261,9 @@
             </a>
 
             <a href="art2-voronoid/index.html" class="art-card">
-                <div class="art-card-image">🔷</div>
+                <div class="art-card-image">
+                    <div class="art-card-image-overlay"></div>
+                </div>
                 <div class="art-card-content">
                     <h2>Experiment 2: Voronoi</h2>
                     <p>Geometric patterns and voronoi diagrams that connect and react to your pose keypoints.</p>
@@ -252,7 +272,9 @@
             </a>
 
             <a href="art3_painting/index.html" class="art-card">
-                <div class="art-card-image">🖌️</div>
+                <div class="art-card-image">
+                    <div class="art-card-image-overlay"></div>
+                </div>
                 <div class="art-card-content">
                     <h2>Experiment 3: Painting</h2>
                     <p>Watercolor-inspired effects with paint splatters and flowing colors based on your acceleration.</p>
@@ -261,7 +283,9 @@
             </a>
 
             <a href="art4_claude_logo/index.html" class="art-card">
-                <div class="art-card-image">✨</div>
+                <div class="art-card-image">
+                    <div class="art-card-image-overlay"></div>
+                </div>
                 <div class="art-card-content">
                     <h2>Experiment 4: Claude Logo Symphony</h2>
                     <p>Logo particles, musical interaction, and skeleton visualization with Swan Lake theme variations.</p>
