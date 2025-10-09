@@ -4,7 +4,6 @@ let poses = [];
 let particles = [];
 let statusText;
 let voronoiPoints = [];
-let pixelArtGrid = [];
 
 function preload() {
     // Load the bodyPose model
@@ -28,7 +27,7 @@ function setup() {
     statusText.html('Model loaded! Move to create art');
 
     // Initialize particles
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 300; i++) {
         particles.push(new Particle());
     }
 
@@ -44,109 +43,10 @@ function setup() {
             noiseSpeed: random(0.002, 0.005)
         });
     }
-
-    // Initialize pixel art grid
-    let pixelSize = 20;
-    for (let x = 0; x < width; x += pixelSize) {
-        for (let y = 0; y < height; y += pixelSize) {
-            if (random() < 0.15) { // Only 15% of grid positions
-                pixelArtGrid.push({
-                    x: x,
-                    y: y,
-                    size: pixelSize,
-                    updateCounter: floor(random(60)) // Stagger updates
-                });
-            }
-        }
-    }
 }
 
 function gotPoses(results) {
     poses = results;
-}
-
-function drawPixelArt() {
-    video.loadPixels();
-
-    for (let pixel of pixelArtGrid) {
-        // Update every N frames for variety
-        pixel.updateCounter++;
-        if (pixel.updateCounter > 30) {
-            pixel.updateCounter = 0;
-        }
-
-        // Sample color from video at this position
-        let videoX = floor(map(pixel.x, 0, width, 0, video.width));
-        let videoY = floor(map(pixel.y, 0, height, 0, video.height));
-
-        // Flip horizontally to match the mirrored display
-        videoX = video.width - videoX;
-
-        let index = (videoX + videoY * video.width) * 4;
-        let r = video.pixels[index];
-        let g = video.pixels[index + 1];
-        let b = video.pixels[index + 2];
-
-        // Calculate proximity to pose keypoints and skeleton
-        let alpha = 40; // Default opacity
-        let closestDist = Infinity;
-
-        if (poses.length > 0) {
-            let pose = poses[0];
-
-            // Check distance to keypoints
-            for (let keypoint of pose.keypoints) {
-                if (keypoint.confidence > 0.2) {
-                    let kx = width - keypoint.x;
-                    let ky = keypoint.y;
-                    let d = dist(pixel.x, pixel.y, kx, ky);
-                    closestDist = min(closestDist, d);
-                }
-            }
-
-            // Check distance to skeleton lines
-            let connections = [
-                ['nose', 'left_eye'], ['nose', 'right_eye'],
-                ['left_eye', 'left_ear'], ['right_eye', 'right_ear'],
-                ['left_shoulder', 'right_shoulder'],
-                ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
-                ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],
-                ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
-                ['left_hip', 'right_hip'],
-                ['left_hip', 'left_knee'], ['left_knee', 'left_ankle'],
-                ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
-            ];
-
-            for (let connection of connections) {
-                let a = pose.keypoints.find(kp => kp.name === connection[0]);
-                let b = pose.keypoints.find(kp => kp.name === connection[1]);
-
-                if (a && b && a.confidence > 0.2 && b.confidence > 0.2) {
-                    let ax = width - a.x;
-                    let ay = a.y;
-                    let bx = width - b.x;
-                    let by = b.y;
-
-                    // Distance to line segment
-                    let lineStart = createVector(ax, ay);
-                    let lineEnd = createVector(bx, by);
-                    let pixelPos = createVector(pixel.x, pixel.y);
-                    let d = distToSegment(pixelPos, lineStart, lineEnd);
-                    closestDist = min(closestDist, d);
-                }
-            }
-
-            // Increase opacity based on proximity to pose
-            if (closestDist < 150) {
-                alpha = map(closestDist, 0, 150, 200, 40);
-            }
-        }
-
-        // Draw the pixel with dynamic opacity
-        noStroke();
-        fill(r, g, b, alpha);
-        rect(pixel.x, pixel.y, pixel.size, pixel.size);
-    }
 }
 
 function distToSegment(p, v, w) {
@@ -165,9 +65,6 @@ function distToSegment(p, v, w) {
 function draw() {
     // Solid background
     background(0);
-
-    // Draw pixel art from video
-    drawPixelArt();
 
     // Draw voronoi diagram
     drawVoronoi();
@@ -385,7 +282,7 @@ class Particle {
         this.pos = createVector(random(width), random(height));
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
-        this.size = random(3, 15);
+        this.size = random(3, 10);
         // Smaller particles move faster, larger particles move slower
         this.maxSpeed = map(this.size, 3, 15, 6, 2);
         this.hue = random(360);
