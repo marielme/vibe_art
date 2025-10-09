@@ -5,6 +5,16 @@ let particles = [];
 let statusText;
 let voronoiPoints = [];
 let pixelArtGrid = [];
+let portals = [];
+
+// Music variables
+let synth;
+let bassSynth;
+let reverbSynth;
+let isPlaying = false;
+let melody;
+let melodyIndex = 0;
+let lastNoteTime = 0;
 
 function preload() {
     // Load the bodyPose model
@@ -57,6 +67,56 @@ function setup() {
             }
         }
     }
+
+    // Setup audio - Swan Lake theme
+    setupMusic();
+}
+
+function setupMusic() {
+    // Create reverb effect
+    const reverb = new Tone.Reverb({
+        decay: 3,
+        wet: 0.3
+    }).toDestination();
+
+    // Main melody synth
+    synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sine' },
+        envelope: {
+            attack: 0.05,
+            decay: 0.2,
+            sustain: 0.3,
+            release: 1
+        }
+    }).connect(reverb);
+
+    // Bass synth
+    bassSynth = new Tone.Synth({
+        oscillator: { type: 'triangle' },
+        envelope: {
+            attack: 0.1,
+            decay: 0.3,
+            sustain: 0.4,
+            release: 1.2
+        }
+    }).connect(reverb);
+
+    // Reverb synth for hand distance arpeggiator
+    reverbSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sine' },
+        envelope: {
+            attack: 0.02,
+            decay: 0.1,
+            sustain: 0.1,
+            release: 0.5
+        }
+    }).connect(reverb);
+
+    // Swan Lake main theme melody (simplified)
+    melody = [
+        'E4', 'F#4', 'G4', 'A4', 'B4', 'C5', 'B4', 'A4',
+        'G4', 'F#4', 'E4', 'D4', 'E4', 'F#4', 'G4', 'A4'
+    ];
 }
 
 function gotPoses(results) {
@@ -178,6 +238,71 @@ function draw() {
     for (let particle of particles) {
         particle.update(poses);
         particle.display();
+    }
+
+    // Play music with pose-reactive variations
+    playMusic();
+}
+
+function playMusic() {
+    // Start audio context on first user interaction
+    if (!isPlaying && Tone.context.state !== 'running') {
+        Tone.start();
+        isPlaying = true;
+    }
+
+    if (!isPlaying) return;
+
+    // Play melody notes based on time
+    let now = millis();
+    let tempo = 120; // Base tempo
+
+    // Adjust tempo based on movement speed
+    if (poses.length > 0) {
+        let pose = poses[0];
+        let leftHand = pose.keypoints.find(kp => kp.name === 'left_wrist');
+        let rightHand = pose.keypoints.find(kp => kp.name === 'right_wrist');
+
+        // Dynamic tempo based on hand distance (60-180 BPM)
+        if (leftHand && rightHand && leftHand.confidence > 0.3 && rightHand.confidence > 0.3) {
+            let handDist = dist(leftHand.x, leftHand.y, rightHand.x, rightHand.y);
+            tempo = map(handDist, 50, 500, 60, 180);
+            tempo = constrain(tempo, 60, 180);
+
+            // Hand distance arpeggiator
+            if (frameCount % 10 === 0) {
+                let arpNote = map(handDist, 50, 500, 0, melody.length - 1);
+                arpNote = floor(constrain(arpNote, 0, melody.length - 1));
+                reverbSynth.triggerAttackRelease(melody[arpNote], '16n');
+            }
+        }
+
+        // Arm spread controls reverb
+        let leftShoulder = pose.keypoints.find(kp => kp.name === 'left_shoulder');
+        let rightShoulder = pose.keypoints.find(kp => kp.name === 'right_shoulder');
+        if (leftShoulder && rightShoulder && leftHand && rightHand) {
+            let shoulderDist = dist(leftShoulder.x, leftShoulder.y, rightShoulder.x, rightShoulder.y);
+            let armSpread = dist(leftHand.x, leftHand.y, rightHand.x, rightHand.y);
+            if (armSpread > shoulderDist * 1.5) {
+                // Arms are spread - more reverb
+            }
+        }
+    }
+
+    let beatInterval = (60 / tempo) * 1000; // ms per beat
+
+    if (now - lastNoteTime > beatInterval) {
+        // Play next melody note
+        synth.triggerAttackRelease(melody[melodyIndex], '8n');
+
+        // Play bass note occasionally
+        if (melodyIndex % 4 === 0) {
+            let bassNote = melody[melodyIndex].replace(/\d/, '2'); // Drop octave
+            bassSynth.triggerAttackRelease(bassNote, '4n');
+        }
+
+        melodyIndex = (melodyIndex + 1) % melody.length;
+        lastNoteTime = now;
     }
 }
 
