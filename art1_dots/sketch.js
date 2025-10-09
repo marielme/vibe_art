@@ -3,13 +3,10 @@ let bodyPose;
 let poses = [];
 let particles = [];
 let statusText;
-let voronoiPoints = [];
 
 function preload() {
     // Load the bodyPose model
     bodyPose = ml5.bodyPose();
-    // Load logo image
-    logoImg = loadImage('/art4_claude_logo/logo.png');
 }
 
 function setup() {
@@ -27,21 +24,8 @@ function setup() {
     statusText.html('Model loaded! Move to create art');
 
     // Initialize particles
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 2100; i++) {
         particles.push(new Particle());
-    }
-
-    // Initialize voronoi points (fewer for better performance)
-    for (let i = 0; i < 50; i++) {
-        voronoiPoints.push({
-            x: random(width),
-            y: random(height),
-            vx: random(-1, 1),
-            vy: random(-1, 1),
-            noiseOffsetX: random(1000),
-            noiseOffsetY: random(1000),
-            noiseSpeed: random(0.002, 0.005)
-        });
     }
 }
 
@@ -49,25 +33,9 @@ function gotPoses(results) {
     poses = results;
 }
 
-function distToSegment(p, v, w) {
-    let l2 = p5.Vector.dist(v, w);
-    l2 = l2 * l2;
-    if (l2 === 0) return p5.Vector.dist(p, v);
-    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
-    t = constrain(t, 0, 1);
-    let projection = createVector(
-        v.x + t * (w.x - v.x),
-        v.y + t * (w.y - v.y)
-    );
-    return p5.Vector.dist(p, projection);
-}
-
 function draw() {
-    // Solid background
-    background(0);
-
-    // Draw voronoi diagram
-    drawVoronoi();
+    // Semi-transparent background for trail effect
+    background(0, 20);
 
     // Draw skeleton and keypoints
     drawKeypoints();
@@ -80,150 +48,6 @@ function draw() {
     }
 }
 
-function drawVoronoi() {
-    // Update voronoi points with pose interaction
-    updateVoronoiPoints();
-
-    // Draw filled triangles first
-    noStroke();
-    for (let i = 0; i < voronoiPoints.length; i++) {
-        for (let j = i + 1; j < voronoiPoints.length; j++) {
-            let d1 = dist(voronoiPoints[i].x, voronoiPoints[i].y,
-                         voronoiPoints[j].x, voronoiPoints[j].y);
-            if (d1 < 250) {
-                // Find a third point to make a triangle
-                for (let k = j + 1; k < voronoiPoints.length; k++) {
-                    let d2 = dist(voronoiPoints[j].x, voronoiPoints[j].y,
-                                 voronoiPoints[k].x, voronoiPoints[k].y);
-                    let d3 = dist(voronoiPoints[i].x, voronoiPoints[i].y,
-                                 voronoiPoints[k].x, voronoiPoints[k].y);
-
-                    if (d2 < 250 && d3 < 250) {
-                        // Draw filled triangle
-                        fill(255, 255, 255, 15);
-                        triangle(voronoiPoints[i].x, voronoiPoints[i].y,
-                                voronoiPoints[j].x, voronoiPoints[j].y,
-                                voronoiPoints[k].x, voronoiPoints[k].y);
-                    }
-                }
-            }
-        }
-    }
-
-    // Draw voronoi edges on top
-    stroke(255, 255, 255, 60);
-    strokeWeight(2);
-    noFill();
-
-    // Draw lines between nearby voronoi points
-    for (let i = 0; i < voronoiPoints.length; i++) {
-        for (let j = i + 1; j < voronoiPoints.length; j++) {
-            let d = dist(voronoiPoints[i].x, voronoiPoints[i].y,
-                        voronoiPoints[j].x, voronoiPoints[j].y);
-            if (d < 250) {
-                let alpha = map(d, 0, 250, 120, 10);
-                stroke(255, 255, 255, alpha);
-                line(voronoiPoints[i].x, voronoiPoints[i].y,
-                     voronoiPoints[j].x, voronoiPoints[j].y);
-            }
-        }
-    }
-
-    // Draw voronoi points as logo images
-    for (let point of voronoiPoints) {
-        push();
-        translate(point.x, point.y);
-        imageMode(CENTER);
-        image(logoImg, 0, 0, 30, 30);
-        pop();
-    }
-
-    // Connect voronoi points to nearby pose keypoints
-    if (poses.length > 0) {
-        for (let point of voronoiPoints) {
-            for (let keypoint of poses[0].keypoints) {
-                if (keypoint.confidence > 0.3) {
-                    let kx = width - keypoint.x;
-                    let ky = keypoint.y;
-                    let d = dist(point.x, point.y, kx, ky);
-
-                    // Only connect if within range
-                    if (d < 200) {
-                        let alpha = map(d, 0, 200, 150, 10);
-                        stroke(255, 255, 255, alpha);
-                        strokeWeight(2);
-                        line(point.x, point.y, kx, ky);
-                    }
-                }
-            }
-        }
-    }
-}
-
-function updateVoronoiPoints() {
-    for (let point of voronoiPoints) {
-        // Smooth Perlin noise-based movement
-        let noiseX = noise(point.noiseOffsetX) * 2 - 1;
-        let noiseY = noise(point.noiseOffsetY) * 2 - 1;
-
-        point.vx += noiseX * 0.1;
-        point.vy += noiseY * 0.1;
-
-        // Increment noise offsets for continuous smooth movement
-        point.noiseOffsetX += point.noiseSpeed;
-        point.noiseOffsetY += point.noiseSpeed;
-
-        point.x += point.vx;
-        point.y += point.vy;
-
-        // Bounce off edges
-        if (point.x < 0 || point.x > width) point.vx *= -1;
-        if (point.y < 0 || point.y > height) point.vy *= -1;
-
-        // Strong attraction to pose keypoints
-        if (poses.length > 0) {
-            let closestDist = Infinity;
-            let closestKeypoint = null;
-
-            for (let keypoint of poses[0].keypoints) {
-                if (keypoint.confidence > 0.2) {
-                    let kx = width - keypoint.x;
-                    let ky = keypoint.y;
-                    let d = dist(point.x, point.y, kx, ky);
-
-                    if (d < closestDist) {
-                        closestDist = d;
-                        closestKeypoint = {x: kx, y: ky};
-                    }
-                }
-            }
-
-            if (closestKeypoint && closestDist < 200) {
-                // Attract to nearest keypoint
-                let angle = atan2(closestKeypoint.y - point.y, closestKeypoint.x - point.x);
-                let force = map(closestDist, 0, 200, 0.5, 0.05);
-                point.vx += cos(angle) * force;
-                point.vy += sin(angle) * force;
-            }
-        }
-
-        // Damping
-        point.vx *= 0.95;
-        point.vy *= 0.95;
-
-        // Constrain velocity
-        let speed = sqrt(point.vx * point.vx + point.vy * point.vy);
-        if (speed > 3) {
-            point.vx = (point.vx / speed) * 3;
-            point.vy = (point.vy / speed) * 3;
-        }
-
-        // Constrain position
-        point.x = constrain(point.x, 0, width);
-        point.y = constrain(point.y, 0, height);
-    }
-}
-
 function drawKeypoints() {
     for (let pose of poses) {
         for (let keypoint of pose.keypoints) {
@@ -231,14 +55,12 @@ function drawKeypoints() {
                 let x = width - keypoint.x;
                 let y = keypoint.y;
 
-                // Draw logo at keypoints
-                push();
-                translate(x, y);
-                imageMode(CENTER);
-                tint(255, 100, 200, 150);
-                image(logoImg, 0, 0, 40, 40);
-                noTint();
-                pop();
+                // Draw glowing circles at keypoints
+                noStroke();
+                fill(255, 100, 200, 150);
+                circle(x, y, 20);
+                fill(255, 200, 255, 200);
+                circle(x, y, 10);
             }
         }
     }
@@ -282,7 +104,7 @@ class Particle {
         this.pos = createVector(random(width), random(height));
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
-        this.size = random(3, 10);
+        this.size = random(3, 15);
         // Smaller particles move faster, larger particles move slower
         this.maxSpeed = map(this.size, 3, 15, 6, 2);
         this.hue = random(360);
@@ -394,22 +216,11 @@ class Particle {
     }
 
     display() {
-        push();
-        translate(this.pos.x, this.pos.y);
-
-        // Rotate based on velocity direction for dynamic look
-        let angle = this.vel.heading();
-        rotate(angle);
-
-        // Draw logo image
-        imageMode(CENTER);
         colorMode(HSB);
-        tint(this.hue, 80, 100, 200);
-        image(logoImg, 0, 0, this.size * 3, this.size * 3);
-        noTint();
+        noStroke();
+        fill(this.hue, 80, 100, 0.8);
+        circle(this.pos.x, this.pos.y, this.size);
         colorMode(RGB);
-
-        pop();
     }
 }
 
